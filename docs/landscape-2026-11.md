@@ -7,8 +7,13 @@ Written 2026-11-19 to help pick Mimir's first project. Three directions: (1) eva
 - **Time:** 2–4 weeks, mostly done by agents.
 - **Output:** a public write-up and a reproducible repo.
 - **Audience:** hiring managers at safety orgs.
+- **The GPU machine:** the 5080 is in a Windows gaming PC that isn't set up yet and is shared with other use. Jobs must be schedulable and interruptible. vLLM needs WSL2 there; llama.cpp and plain PyTorch run natively. Each shortlisted idea below says how it handles interruption.
 
-**How citations were checked.** Unless marked otherwise, every arXiv ID below was checked against the arXiv API on 2026-11-19, and its title, first author and date matched. Items marked *(unverified)* were seen only in search snippets, conference listings or secondary write-ups. Grant statuses are especially murky: aggregators disagree with each other and with funders' own pages, so treat every "open" as "check before applying".
+**How citations were checked.** Unless marked otherwise, every arXiv ID below was checked against the arXiv API on 2026-11-19, and its title, first author and date matched.
+- **How far that goes:** the check confirms each paper exists and is correctly attributed. Most quantitative findings quoted here come from abstracts, and in some cases from full text. Numbers marked *(snippet)* were seen only in search summaries.
+- **Directly checked against the paper's HTML:** the numbers the ranking rests on: RUT's failure on 8-bit (2506.06975), Gao et al.'s quantization coverage (2410.20247), Cai et al.'s threat model (2504.04715) and the Donnelly et al. setup (2611.09945).
+- **Unverified items:** marked *(unverified)*. They were seen only in search snippets, conference listings or secondary write-ups.
+- **Grant statuses are especially murky:** aggregators disagree with each other and with funders' own pages, so treat every "open" as "check before applying".
 
 ---
 
@@ -62,7 +67,7 @@ Written 2026-11-19 to help pick Mimir's first project. Three directions: (1) eva
 **Hidden objectives, alignment faking, reward hacking**
 - Anthropic's auditing game: 3 of 4 blinded teams found an implanted hidden objective, partly by using SAEs ([Marks et al., 2503.10965](https://arxiv.org/abs/2503.10965)).
 - Alignment-faking probes:
-  - PRISM: probes work on Llama but sit at chance on Qwen, and don't transfer ([Mehta, 2607.13346](https://arxiv.org/abs/2607.13346); the agent first saw this paper under a different title on alphaXiv).
+  - PRISM: probes work on Llama but sit at chance on Qwen, and don't transfer ([Mehta, 2607.13346](https://arxiv.org/abs/2607.13346); an earlier version circulated on alphaXiv under a different title).
   - Value-conflict diagnostics find a rank-1 oversight direction ([Nair et al., 2604.20995](https://arxiv.org/abs/2604.20995)).
 - Reward-hacking probes are now a crowded subfield ([Wilhelm et al., 2603.04069](https://arxiv.org/abs/2603.04069); [Bergen et al., 2609.19101](https://arxiv.org/abs/2609.19101)).
 
@@ -80,14 +85,15 @@ Written 2026-11-19 to help pick Mimir's first project. Three directions: (1) eva
 
 ### Project ideas
 
-**1A. A ≤4B model organism of unverbalized eval awareness, plus a detector bake-off** *(shortlist #2)*
+**1A. A ≤4B model organism of unverbalized eval awareness, plus a detector bake-off** *(shortlist #1)*
 - **Question:** Can a 4B model learn to act on eval recognition without verbalising it? If so, which detectors recover that recognition per instance: probes, Gemma Scope 2 SAE latents, logit-lens or logit monitors, noise injection, or black-box follow-up queries and LLM judges?
 - **Minimal first experiment (week 1):**
   - LoRA-train Gemma-3-4B-IT, with Qwen3-4B as the alternate, on Donnelly-style data: SFT to emit a marker token in the final answer when eval cues are present, with the marker kept out of reasoning.
   - Check that the marker tracks eval framing (system prompt says eval / says deploy / says nothing).
   - If marker accuracy in the "says nothing" condition is well above chance, train a diff-of-means probe on the *base* model and report AUROC against the marker labels.
-- **Models:** Gemma-3-4B-IT, chosen because Gemma Scope 2 covers it. Qwen3-4B as a replication.
+- **Models:** Gemma-3-4B-IT, chosen because Gemma Scope 2 covers it (`google/gemma-scope-2-4b-it` on Hugging Face, which includes residual, MLP, attention and crosscoder SAEs; checked). Qwen3-4B as a replication.
 - **VRAM:** about 8–9 GB of bf16 weights. LoRA training with gradient checkpointing fits in about 12–15 GB at sequence length ≤2k; use QLoRA if it doesn't fit. Inference and activation caching use about 10 GB.
+- **Interruptibility:** LoRA training needs checkpoints every few hundred steps and the ability to resume. Activation caching and detector evaluation run in resumable shards. Runs natively on Windows with PyTorch.
 - **Main null-result risk:** At 4B the organism may not learn "recognise eval from content cues" without leaning on surface triggers. Then the marker only tracks a trivial cue and the testbed is uninteresting. Gate on this in week 1. If every detector fails, as at 27B, that is still a usable result ("it fails at 4B too, and here is a testbed you can iterate on cheaply") but less exciting.
 - **Scoop risk:** medium. The Donnelly and Abdelnabi groups might shrink their own organism.
 - **What a good result shows a hiring manager:**
@@ -118,6 +124,8 @@ Written 2026-11-19 to help pick Mimir's first project. Three directions: (1) eva
 - **Minimal first experiment:** 200 content-matched pairs × 2 formats × 2 framings on Gemma-3-1B and 4B; correlate probe score with the behaviour delta.
 - **VRAM:** under 10 GB.
 - **Null-result risk:** high. Nayan et al. already found weak coupling.
+- **What a good result shows:** careful experimental controls. But it would read as a follow-up to six existing papers.
+- **Grants:** same as 1A.
 - **Crowding:** at least six papers in 2025–26 plus a LessWrong hobby project ("Eval awareness steering detects the test, not the sabotage", Llama-3.1-8B, at chance; *snippet only*). A plain "probe Qwen/Gemma for eval awareness" project now reads as derivative.
 
 ---
@@ -144,11 +152,15 @@ Written 2026-11-19 to help pick Mimir's first project. Three directions: (1) eva
   - OpenRouter's [Exacto](https://openrouter.ai/blog/announcements/provider-variance-introducing-exacto/) routes by measured tool-call validity. OpenRouter says quantization alone had no measurable tool-call impact and blames parsers; this is self-reported.
 
 **Mild quantization is the hard case**
-- Cai et al. find quantization hides inside natural variability and argue for TEE attestation instead ([2504.04715](https://arxiv.org/abs/2504.04715)).
-- RUT detects 4-bit substitution but not 8-bit Gemma or Mistral.
+- Cai et al. find quantization hides inside natural variability and argue for TEE attestation instead ([2504.04715](https://arxiv.org/abs/2504.04715)). Their threat model names INT8, FP8 and NF4.
+- Gao et al. simulated detection of fp16, bitsandbytes int8 and nf4 on Llama and OLMo. 4-bit is "consistently noticeable"; 8-bit has "more inconsistent effects" (checked in the HTML).
+- RUT compared Llama-3.2-3B, Mistral-7B and Gemma-2-9B against their 4-bit and 8-bit variants. For 8-bit Gemma and Mistral, "statistical power AUC remains near zero" for every method (checked in the HTML).
 - KBF flagged none of 9 quantized backends (*snippet*).
 - Follow-up-query features separate 4-bit from 32-bit Llama-3 at AUROC about 0.98 ([Sam et al., 2501.01558](https://arxiv.org/abs/2501.01558)), but only at that extreme gap.
-- **I found no map of how many queries detection needs, by quantization scheme and API access level.** The negative results are scattered.
+- **So detectability against sample count has been measured for bitsandbytes int8 and nf4.** What I did not find in two searches:
+  - Results for the formats production providers actually serve: vLLM fp8 W8A8, AWQ and GPTQ, GGUF k-quants.
+  - Results by access level (text, top-1 or top-k logprobs).
+  - Any pairing of detectability with *harm*, that is, whether the undetectable variants are also harmless on the agentic and tool-call tasks where Ventor-QTest sees degradation.
 
 **Logits and restricted APIs leak architecture**
 - Production models' embedding projection and hidden dimension can be stolen through the API ([Carlini et al., 2403.06634](https://arxiv.org/abs/2403.06634); [Finlayson et al., 2403.09539](https://arxiv.org/abs/2403.09539)).
@@ -168,7 +180,7 @@ Written 2026-11-19 to help pick Mimir's first project. Three directions: (1) eva
 
 **Verifiable inference**
 - TOPLOC: locality-sensitive hashes of top-k activations, 258 bytes per 32 tokens. Its own experiments claim 100% detection of model, prompt and precision changes ([Ong et al., 2501.16007](https://arxiv.org/abs/2501.16007)).
-- TensorCommitments reports TOPLOC detection falling to 62–73% under tailored attacks. These are the competing authors' own numbers ([Baser et al., 2602.12630](https://arxiv.org/abs/2602.12630)).
+- TensorCommitments reports TOPLOC detection falling to 62–73% under tailored attacks. These are the competing authors' own numbers, seen in a search summary rather than the paper (*snippet*) ([Baser et al., 2602.12630](https://arxiv.org/abs/2602.12630)).
 - Bit-exact cross-GPU replay is possible ([Cankaya, 2606.00279](https://arxiv.org/abs/2606.00279)). EigenAI builds deterministic re-execution with TEEs ([2602.00182](https://arxiv.org/abs/2602.00182)).
 - Zero-knowledge proofs of inference can be passed by "hollow" weights that do trivial computation ([Gong et al., 2607.28884](https://arxiv.org/abs/2607.28884)).
 - Thinking Machines traced inference nondeterminism mainly to a lack of batch invariance ("Defeating Nondeterminism in LLM Inference", Sep 2025; *primary post not read*).
@@ -184,29 +196,34 @@ Written 2026-11-19 to help pick Mimir's first project. Three directions: (1) eva
 - Field signal: Constellation and Longview held an invite-only "Verification Infrastructure for Frontier AI" workshop on 2026-10-22 ([frontierverification.org](https://frontierverification.org/)). Its target claims include "which models are deployed", and it is explicitly scoping 6–18-month projects.
 
 ### Open gaps that fit our constraints
-1. **A detectability frontier for quantization and substitution.** How many queries are needed to detect each quantization scheme (fp8, int8, AWQ/GPTQ-4bit, GGUF Q4/Q3) at each access level (text only, top-1 logprob, top-k logprobs)? And where is it information-theoretically hopeless? A 5080 can serve all of these locally.
+1. **Detectability vs harm for production quantization formats.** Power curves exist for bitsandbytes int8 and nf4 (Gao et al., RUT). Missing: production formats (fp8 W8A8, AWQ and GPTQ, GGUF k-quants), the different access levels, and whether the formats that can't be detected also cause no harm on agentic and tool-call tasks. A 5080 can serve all of these locally.
 2. **Red-teaming activation-hash verification with small models.** Which cheap substitutions pass TOPLOC's tolerance thresholds: fp8 or int8 weights, a smaller sibling, a light fine-tune?
 3. **Passive provenance under laundering.** How do LLMPrint, Nikolic-style testing and palimpsest provenance hold up under merging, distillation and abliteration? Backdoor fingerprints have been studied far more.
 
 ### Project ideas
 
-**2A. "How many queries to catch a quantized endpoint?" A detectability map** *(shortlist #1)*
-- **Question:** For a fixed open model, what is the sample complexity of detecting each quantization or substitution type, under each access level, with the best current tests (MMD-Hamming, RUT, KBF-style probes, single-token distributions, follow-up-query features)? Where is the floor below which detection is impossible at realistic budgets?
+**2A. Is the quantization providers actually serve detectable, and does it matter? A detectability-vs-harm map** *(shortlist #2)*
+- **Question:** Take the quantization formats real providers serve: vLLM fp8 W8A8, AWQ and GPTQ int4, GGUF Q4_K_M and Q3_K. For each, how many queries do the best current tests need to detect it (MMD-Hamming, RUT, KBF-style probes, single-token distributions, follow-up-query features), at each access level (text only, top-1 logprob, top-k logprobs)?
+  - And, crucially: do the formats that can't be detected also cause no harm on agentic and tool-call tasks?
+  - If an undetectable variant is also harmless, software audits are enough. If it is harmful, they are blind where it matters.
+- **What is new compared with prior work:**
+  - Gao et al. and RUT already measured power for bitsandbytes int8 and nf4. This idea moves to production formats and access levels, and pairs detectability with downstream harm.
+  - Novelty is moderate. The write-up has to lead with the pairing, not with "another detection benchmark".
 - **Minimal first experiment (days 1–4):**
-  - Serve Qwen3-4B-Instruct in bf16 and fp8 with vLLM on the 5080 (Blackwell supports fp8 natively).
-  - Run the `model-equality-testing` MMD test and a single-token-distribution test.
-  - Plot statistical power against queries per prompt.
-  - If fp8 is detectable within about 10k queries, add int8, AWQ-4bit and GGUF Q4_K_M and Q3, then Llama-3.2-3B as a second family.
-- **Models:** Qwen3-1.7B and 4B, Llama-3.2-3B-Instruct, optionally an 8B in 4-bit as the "substitute". vLLM and llama.cpp.
+  - Validate the pipeline on a known positive first. Serve Qwen3-4B-Instruct in bf16 and AWQ-int4. Run the `model-equality-testing` MMD test and RUT, and plot power against queries. This should match the published finding that 4-bit is detectable.
+  - Then move to milder formats: GGUF Q4_K_M, then int8, then fp8.
+  - In parallel, run a small tool-call or agentic suite (BFCL-style function calling, a short multi-turn task) on each variant to measure harm.
+- **Models:** Qwen3-1.7B and 4B, Llama-3.2-3B-Instruct (for direct comparison with RUT), optionally an 8B in 4-bit as the substitute. vLLM and llama.cpp.
 - **VRAM:** 2–9 GB per served model; one at a time is fine. No training.
+- **Interruptibility:** sampling writes to disk prompt by prompt and resumes for free. vLLM needs WSL2 on the Windows box; llama.cpp runs natively.
 - **API cost:**
   - Validate on 3–5 real OpenRouter endpoints of the same open model, at a few thousand short completions each, which is about $5–20.
   - Optionally spend up to $20 on frontier-model judging of output quality.
-- **Main null-result risk:** "8-bit is undetectable with any black-box test at under 100k queries" is plausible. That is still a publishable bound if framed as *mapping the limit*, which also motivates attestation and TOPLOC-style approaches. The bigger risk is looking incremental next to RUT and KBF, so the selling point has to be the systematic map plus a real-provider check, not a new test.
+- **Main null-result risk:** "8-bit production formats are both undetectable and harmless" is plausible, and fairly boring. "Undetectable but harmful on tool calls" would be the headline. The bigger risk is looking incremental next to Gao et al., RUT and KBF.
 - **What a good result shows a hiring manager:**
   - Careful statistical evaluation design.
   - Reproducible infrastructure.
-  - A policy-relevant takeaway ("software-only audits can or cannot catch X; here's the budget").
+  - A policy-relevant takeaway ("software-only audits can or cannot catch X; here's the budget, and here's whether X matters").
   - This is legible to METR, UK AISI, RAND, IAPS, Prime Intellect and Epoch, and to the evals sides of Anthropic and OpenAI. It plays to Alex's evals and EE/statistics strengths and needs no interp credentials.
 - **Grants:** see the funder list below. Realistically Manifund or LTFF for a small amount, plus pitching follow-on work into the Constellation/Longview verification pipeline.
 
@@ -224,9 +241,10 @@ Written 2026-11-19 to help pick Mimir's first project. Three directions: (1) eva
 - **Minimal first experiment:** Take Qwen2.5-0.5B as the parent and build five derivatives: LoRA SFT, 50/50 TIES merge with an unrelated 0.5B model, distilled student, abliterated, Q4. Score them with LLMPrint, Nikolic-style testing and REEF.
 - **VRAM:** 4–12 GB.
 - **Main null-result risk:** low, since a robustness table always comes out. Novelty risk is medium.
-- **Hiring value:** good for governance and open-weights-policy orgs, weaker for safety labs.
+- **What a good result shows:** a rigorous robustness evaluation. Good for governance and open-weights-policy orgs, weaker for safety labs.
+- **Grants:** as below.
 
-### Funders for this direction (the steward asked)
+### Funders for this direction
 **I found no open call dedicated to this area.**
 
 Closed:
@@ -273,7 +291,7 @@ The best route is probably networking rather than grants. The Constellation/Long
   - The authors say there is no precise mechanistic account of the override.
 
 **Sparse decompositions and tooling**
-- Transcoders plus Lorsa (sparse attention replacement) cover all 15 layers of the BT4 transformer, giving attribution-graph-style tactical pathways with weights released ([Lin et al., 2604.10158](https://arxiv.org/abs/2604.10158); HF `JacklE0niden/lc0-BT4-tc`, `lc0-BT4-lorsa`, *repo seen by the subagent, not by me*). A third-party review calls the fidelity checks thin (*unverified*).
+- Transcoders plus Lorsa (sparse attention replacement) cover all 15 layers of the BT4 transformer, giving attribution-graph-style tactical pathways with weights released ([Lin et al., 2604.10158](https://arxiv.org/abs/2604.10158); HF `JacklE0niden/lc0-BT4-tc` and `lc0-BT4-lorsa`, both confirmed to exist). A third-party review calls the fidelity checks thin (*unverified*).
 - Lc0's transformer architecture is now published ([Chessformer, Monroe et al., 2605.19091](https://arxiv.org/abs/2605.19091)).
 - Hookable tooling covers BT4, Maia-3 and the searchless 9M/136M/270M models ([Litman, 2609.23917](https://arxiv.org/abs/2609.23917), with the chessformer_lens tool).
 
@@ -303,6 +321,7 @@ The best route is probably networking rather than grants. The Constellation/Long
 - **Question:** Which features carry the correct tactic in the middle layers of BT4, and which late-layer features or heads suppress it in favour of the "safe" move?
 - **Minimal first experiment:** Load BT4 and the released transcoders through chessformer_lens or Leela-SAEs. Check that forgotten puzzles occur in BT4 (Sandmann studied T82): count logit-lens hits for the solution move in middle layers against final-layer misses on Lichess puzzles. If there are at least about 50 cases, build attribution graphs for 10 of them and ablate the candidate suppressor features.
 - **Models:** BT4-1024x15x32h, about 190M parameters, a few hundred MB.
+- **Interruptibility:** no training; attribution graphs are computed per position and cached, so runs resume trivially. PyTorch runs natively on Windows.
 - **VRAM:** 4–12 GB depending on how many replacement layers are loaded. Stream activations; caching one layer over 1M positions would take about 130 GB.
 - **Main null-result risks:**
   - The forgotten-puzzle effect may be rarer in BT4.
@@ -316,9 +335,11 @@ The best route is probably networking rather than grants. The Constellation/Long
 - **Minimal first experiment:** On Jenner's puzzle set with T82 or BT4, compute probe accuracy for the third-ply move and causal patching effect on the same positions. Report the fraction of "decodable but causally unused" cases.
 - **VRAM:** ≤12 GB, including Gemma-2-2B in bf16.
 - **Main null-result risk:** low for the chess half, high for the transfer half. It also takes 4+ weeks if done properly.
+- **Models:** Lc0 T82-768x15x24h or BT4-1024x15x32h for the chess half; Gemma-2-2B (with Gemma Scope SAEs) for the transfer half.
 - **What a good result shows:** an interpretability-methods contribution with a planning-as-scheming-proxy story.
+- **Grants:** general interpretability funding (CG, LTFF, Manifund), pitched on the LLM-transfer half.
 
-**3C. Fix and finish the replication.** Fix the reshape bug, rerun NMF, add McGrath-style concept regression against python-chess and Stockfish eval terms, and compare NMF, SAE and probes. This takes about 1 week and uses under 4 GB. **This is a repair job, not a headline project.** Do the bug fix regardless; do the rest only as a warm-up.
+**Repair task, not one of the direction's ideas: fix and finish the replication.** Fix the reshape bug, rerun NMF, add McGrath-style concept regression against python-chess and Stockfish eval terms, and compare NMF, SAE and probes. This takes about 1 week and uses under 4 GB on the existing conv net. Do the bug fix regardless; do the rest only as a warm-up.
 
 ### Hiring value compared with directions 1 and 2 (candid)
 For the target orgs I would rank them **1 > 2 > 3 on its own**, but 3 is not worthless.
@@ -330,38 +351,46 @@ For the target orgs I would rank them **1 > 2 > 3 on its own**, but 3 is not wor
 
 ## Ranked shortlist
 
-**#1: 2A, a detectability map for quantization and substitution.**
-- **Why first:**
-  - The gap is real and confirmed: published tests fail on 8-bit, yet nobody has mapped sample complexity across schemes and access levels.
-  - It runs entirely on the 5080 with no training, and the API spend is about $10–20.
-  - Null-result risk is lowest: a negative is a bound, and bounds are policy-relevant.
-  - It uses Alex's evals and statistics strengths directly and needs no interpretability credentials to be credible.
-  - The hiring audience is broad: METR, UK AISI, RAND, IAPS, Prime Intellect, and the evals and policy sides of the labs. The verification community is visibly forming right now (the Oct 2026 Constellation/Longview workshop).
-- **Weakness:** it is less legible to interpretability teams, and it sits near RUT and KBF, so the write-up must be about the *map*, not a new test.
-- **Achievable in 2 weeks**, leaving time for the next project.
+The ranking is per idea, not per direction. It weighs hiring value, novelty against what I could find, null-result risk, and fit to one GPU and 2–4 weeks.
 
-**#2: 1A, a ≤4B organism of unverbalized eval awareness plus a detector bake-off.**
-- **Why:**
+**#1: 1A, a ≤4B organism of unverbalized eval awareness plus a detector bake-off.**
+- **Why first:**
   - It is the most topical question in safety evals: eval awareness is now a headline worry in frontier system cards.
-  - The 27B testbed published a month ago is out of reach for most researchers, so a 4B version is a public good.
-  - The bake-off includes the strong black-box baselines that interpretability papers often skip, which is Alex's comparative advantage.
-- **Ranked below #1 because:**
-  - Null risk is higher: the 4B organism may only learn surface cues, which is why week 1 is a go/no-go gate.
+  - The field has just shown that white-box detectors fail on a 27B organism (Donnelly et al., Oct 2026). A testbed that runs on one consumer GPU is a public good, and the main gap is novelty rather than repetition.
+  - The bake-off includes the strong black-box baselines that interpretability papers often skip (follow-up-query classifiers, LLM judges), which is Alex's comparative advantage.
+  - It speaks directly to Anthropic, Apollo, UK AISI, Goodfire and Transluce.
+- **Risks:**
+  - The 4B organism may learn only surface cues, so week 1 is a go/no-go gate on whether the marker tracks content-based eval recognition.
   - Scoop risk is real.
-- If Alex mainly wants Anthropic, Apollo or Goodfire, consider swapping #1 and #2.
+- **If the gate fails:** switch to #2, which needs no training and can be running within days.
+
+**#2: 2A, detectability vs harm for production quantization formats.**
+- **Why:**
+  - It runs entirely on the 5080 with no training, and API spend is about $10–20.
+  - Null-result risk is low.
+  - It uses Alex's evals and statistics strengths, and has a broad, policy-relevant audience: METR, UK AISI, RAND, IAPS, Prime Intellect, and the evals sides of the labs. The verification community is visibly forming (the Oct 2026 Constellation/Longview workshop).
+- **Ranked below #1 because:** checking the papers directly showed that Gao et al. and RUT already plotted detection power for bitsandbytes int8 and nf4, so novelty is moderate. It rests on production formats, access levels and the detectability–harm pairing. It is also less legible to interpretability teams.
+- **If Alex mainly wants evals, governance or verification roles, rank this #1.** It is the safest 2-week project.
 
 **#3: 3A, circuit-tracing "forgotten puzzles" in BT4.**
 - **Why:**
   - The released transcoders make it cheap.
   - It answers the stated open question of a NeurIPS 2026 oral.
-  - It extends Alex's Lc0 story into a narrative about latent knowledge versus output.
+  - It extends Alex's Lc0 story into a narrative about latent knowledge versus output, which shows interpretability-methods skill.
+- **Why it beats the runners-up despite direction 3's lower hiring value:**
+  - The runners-up overlap papers published in the last few weeks or months.
+  - 3A has a clearly unanswered question, ready-made tools and low compute.
 - **Ranked third because:** hiring value outside interpretability teams is low, and the effect has to replicate on BT4 first.
 
 **Close runners-up:**
 - 2B (red-team TOPLOC): a great fit for governance orgs, but TensorCommitments has partly done it.
 - 1B (adaptive-attack detector comparison): good, but overlaps Soopal et al. from 8 days ago.
 
-**Suggested sequencing:** Fix the lc0-knowledge bug this week (half a day). Do #1 as the first project. Start #2 next, reusing its evaluation harness.
+**Suggested sequencing:**
+1. Fix the lc0-knowledge bug this week (half a day).
+2. Set up the gaming PC (WSL2, CUDA, a resumable job runner).
+3. Run 1A's week-1 gate.
+4. Then either continue 1A, or fall back to 2A, which shares the black-box-detector harness.
 
 ### Already done or crowded: avoid
 - Probing small open models for eval awareness, and layer and scale sweeps of eval awareness.
@@ -381,13 +410,13 @@ For the target orgs I would rank them **1 > 2 > 3 on its own**, but 3 is not wor
 ### What surprised me
 - **How fast the eval-awareness probe space filled.** Six or more papers in 18 months, sweeps up to 37 models, and already a published critique ("it's format") plus a ground-truth paper showing every white-box method fails. The interesting question has moved from "can we detect it" to "is what we detect real".
 - **The benign-distractor sandbagging gap I planned to propose closed eight days ago** (Soopal et al.), with a striking result: probes flag 99% of benign adapters.
-- **8-bit quantization is effectively invisible to every published black-box audit**, and OpenRouter claims it doesn't even affect tool calls. Either providers' quantization is harmless, or our audits are blind; nobody has cleanly separated the two. That is idea #1.
+- **8-bit quantization is effectively invisible to every published black-box audit**, and OpenRouter claims it doesn't even affect tool calls. Either providers' quantization is harmless, or our audits are blind, and I found nobody who has cleanly separated the two. That is idea 2A.
 - **Chess interpretability moved to academia**, and the two obvious next steps (BT4 transcoders, the override effect) were both published in 2026.
 - **Alex's public Lc0 repo has a reshape bug that scrambles its main result.** It is easy to fix, and it matters because hiring managers do open repos.
 
 ### Open decisions for Alex
-1. Which to start: #1 (broad audience, safest) or #2 (most topical, riskier)?
-2. Target audience. Interpretability teams favour #2 and #3; evals and governance orgs favour #1.
+1. Which to start: #1 (most topical, riskier, with a week-1 gate) or #2 (broad evals and governance audience, safest)?
+2. Target audience. Interpretability and alignment teams favour #1 and #3; evals and governance orgs favour #2.
 3. Whether to fix the lc0-knowledge bug now. I recommend yes.
 
 Once a project is picked, add an entry to `research-log.md` recording the choice and why.
