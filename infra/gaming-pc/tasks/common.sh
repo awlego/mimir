@@ -13,8 +13,10 @@ GPU_BUSY_MIB="${MIMIR_GPU_BUSY_MIB:-2500}"   # VRAM in use above this = someone 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 # Prints the running job's name and returns 0, or returns 1 if none is running.
+boot_id() { cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo none; }
 running_job() {
   [ -f "$STATE/job.pid" ] || return 1
+  [ "$(cat "$STATE/job.boot" 2>/dev/null)" = "$(boot_id)" ] || return 1   # pid file from before a reboot
   local pid; pid="$(cat "$STATE/job.pid")"
   if kill -0 "$pid" 2>/dev/null; then cat "$STATE/job.name"; return 0; fi
   return 1

@@ -17,7 +17,7 @@ fi
 git -C "$WT" pull -q --ff-only origin "$BRANCH" 2>/dev/null || true
 
 for j in $jobs; do
-  (cd "runs/$j" && find . -path '*/checkpoint*' -prune -o -type f -size -1M \
+  (cd "runs/$j" && find . -path '*/checkpoint*' -prune -o -type f -size -1048576c \
      \( -name '*.json' -o -name '*.jsonl' -o -name '*.csv' -o -name '*.md' -o -name '*.txt' -o -name '*.png' -o -name 'DONE' \) -print) |
   while read -r f; do
     mkdir -p "$WT/results/gaming-pc/$j/$(dirname "$f")"

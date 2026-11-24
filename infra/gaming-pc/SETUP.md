@@ -23,7 +23,7 @@ Install the latest **Game Ready** (or Studio) driver for the RTX 5080 from <http
 
 **Never install an NVIDIA driver inside Ubuntu.** That means no `nvidia-driver-*`, no `cuda-drivers`, no `nvidia-open`, and no `cuda` or `cuda-13-x` meta-packages. A Linux driver overwrites the driver that WSL maps in from Windows [1].
 
-The PyTorch build used below runs on CUDA 13.2. CUDA 13.x needs driver **580 or newer**, and 13.2 belongs to the R595 driver branch [2]. Any current driver is far past both.
+The PyTorch build used below runs on CUDA 13.2. CUDA 13.x needs driver **580 or newer**, and 13.2 belongs to the R595 driver branch [2]. Install the newest driver offered; it should be at least 595.
 
 ```powershell
 PS> nvidia-smi
@@ -31,7 +31,7 @@ PS> nvidia-smi
 
 **You should see:**
 - `NVIDIA GeForce RTX 5080` with 16303 MiB or so.
-- A `Driver Version` of at least 595.
+- A `Driver Version` of 580 or newer (595 or newer to match CUDA 13.2).
 - `CUDA Version: 13.x` with x ≥ 2.
 
 **If not:**
@@ -174,7 +174,7 @@ $ env3.12/bin/hf auth whoami
 $ cd ~/mimir && env3.12/bin/python infra/gaming-pc/smoke_test.py
 ```
 
-The first run downloads about 8.6 GB into `~/.cache/huggingface`.
+The first run downloads the model, several GB, into `~/.cache/huggingface`.
 
 **You should see:**
 - The torch and CUDA versions, with `sm_120` in the arch list.
@@ -194,6 +194,33 @@ Please paste the whole output into Heimdall: it is our first real number for thi
 
 ## 8. Heimdall workspace and tasks
 
+### First, check the bridge from Windows
+
+This is how Heimdall will start jobs. Close every Ubuntu window, then in PowerShell:
+
+```powershell
+PS> wsl.exe -d Ubuntu-24.04 --exec bash /home/LINUXUSER/mimir/infra/gaming-pc/tasks/run.sh dummy
+```
+
+Wait two minutes, still with no Ubuntu window open, then run:
+
+```powershell
+PS> wsl.exe -d Ubuntu-24.04 --exec bash /home/LINUXUSER/mimir/infra/gaming-pc/tasks/job-status.sh
+```
+
+**You should see:**
+- The first command prints `Started 'dummy'` and returns after about 5 seconds.
+- The second prints `RUNNING: dummy`, with log lines past `step 100/120` or `DONE`.
+
+Then clean up with `rm -r ~/mimir/runs/dummy` in Ubuntu.
+
+**If not:**
+- `--exec` unknown: run `wsl --update`.
+- `GPU busy`: your desktop uses more than the 2500 MiB default. Set the threshold (step 9, first part), then retry.
+- The job is gone and the log stops early: the distro was shut down. Recheck the `.wslconfig` part of step 2.
+
+### Then add the workspace
+
 The machine agent on Windows reads `C:\Users\<you>\.heimdall\machine.json`. That is `%USERPROFILE%\.heimdall\machine.json`, the file the first `node machine-agent.mjs --hub … --token …` created.
 
 1. Open it in Notepad: `PS> notepad $env:USERPROFILE\.heimdall\machine.json`.
@@ -202,7 +229,10 @@ The machine agent on Windows reads `C:\Users\<you>\.heimdall\machine.json`. That
 3. Replace every `LINUXUSER` with your Linux username: 7 places, including the `folder` line.
 4. Save. Keep `hub`, `token` and everything else as they are.
 
-The agent reloads the file by itself within a few seconds. In its console you should see `Config reloaded.`
+The current agent reloads the file by itself within a few seconds, and its console says `Config reloaded.`
+- The agent on this PC is an older version: Heimdall shows it without realm support.
+- If nothing reloads, stop the agent (Ctrl+C in its window) and start it again.
+- Better, download a fresh `machine-agent.mjs` from Heimdall (Machines, Add shows the `curl` line) and start that. It keeps the same `machine.json`.
 
 **Check:** ask Heimdall (the steward) to run `gpu-status` and `list_files` on `gaming-pc`/`mimir`. You should see the GPU table and `FREE: …`, and the repo's top-level files.
 
@@ -211,6 +241,7 @@ The agent reloads the file by itself within a few seconds. In its console you sh
 - `No such file or folder` for every task: the agent can't see `\\wsl.localhost\…`.
   - Open that path in Explorer. If Explorer can't either, start Ubuntu once and retry.
   - If Explorer works but the agent still fails, try `\\\\wsl$\\Ubuntu-24.04\\home\\LINUXUSER\\mimir` as the `folder`.
+  - If neither works, set `folder` to any plain Windows folder, such as `"C:\\Users\\<you>\\.heimdall\\mimir"` (create it). The tasks still work, because they use absolute WSL paths. Only Heimdall's `list_files` and `read_file` lose sight of the repo; `job-status` still shows the logs.
 - `couldn't start: spawn wsl.exe ENOENT`: replace `"wsl.exe"` with `"C:\\Windows\\System32\\wsl.exe"`.
 
 ## 9. Calibrate "GPU busy" and try the runner

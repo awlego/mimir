@@ -15,6 +15,7 @@ export PYTHONPATH="$REPO/infra/gaming-pc${PYTHONPATH:+:$PYTHONPATH}"   # for gra
 # setsid + nohup: the job outlives this task and wsl.exe; stdin/stdout detached so the task returns.
 setsid nohup bash "infra/gaming-pc/jobs/$name.sh" >> "$log" 2>&1 < /dev/null &
 echo $! > "$STATE/job.pid"
+boot_id > "$STATE/job.boot"
 echo "$name" > "$STATE/job.name"
 sleep 5
 if ! running_job > /dev/null; then
