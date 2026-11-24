@@ -141,7 +141,9 @@ def main(workers: int) -> None:
     rng_np = np.random.default_rng(SEED)
 
     pools = {}
-    for fam in set(f for a in EVAL_TRAIN_ALLOC.values() for f in a) | set(EVAL_TEST_ALLOC):
+    # Sorted, not set order: set iteration order varies between processes, which would
+    # change the shuffles and defeat the LLM cache on resume.
+    for fam in sorted(set(f for a in EVAL_TRAIN_ALLOC.values() for f in a) | set(EVAL_TEST_ALLOC)):
         items = load_eval(fam)
         rng.shuffle(items)
         pools[fam] = items
