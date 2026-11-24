@@ -1,0 +1,34 @@
+{
+  "mimir": {
+    "folder": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\LINUXUSER\\mimir",
+    "tasks": {
+      "sync": {
+        "argv": ["wsl.exe", "-d", "Ubuntu-24.04", "--exec", "bash", "/home/LINUXUSER/mimir/infra/gaming-pc/tasks/sync.sh"],
+        "description": "git pull --ff-only in the WSL checkout of mimir."
+      },
+      "gpu-status": {
+        "argv": ["wsl.exe", "-d", "Ubuntu-24.04", "--exec", "bash", "/home/LINUXUSER/mimir/infra/gaming-pc/tasks/gpu-status.sh"],
+        "description": "nvidia-smi summary, the running mimir job, and whether the GPU is free (VRAM in use vs a threshold)."
+      },
+      "run": {
+        "argv": ["wsl.exe", "-d", "Ubuntu-24.04", "--exec", "bash", "/home/LINUXUSER/mimir/infra/gaming-pc/tasks/run.sh"],
+        "args": true,
+        "description": "run <job>: start infra/gaming-pc/jobs/<job>.sh detached, logging to runs/_gaming-pc/logs/<job>.log. Refuses if the GPU is busy or a job is running. A stopped job resumes."
+      },
+      "job-status": {
+        "argv": ["wsl.exe", "-d", "Ubuntu-24.04", "--exec", "bash", "/home/LINUXUSER/mimir/infra/gaming-pc/tasks/job-status.sh"],
+        "args": true,
+        "description": "job-status [job]: whether the job runs, its latest checkpoint, DONE marker and the end of its log."
+      },
+      "stop": {
+        "argv": ["wsl.exe", "-d", "Ubuntu-24.04", "--exec", "bash", "/home/LINUXUSER/mimir/infra/gaming-pc/tasks/stop.sh"],
+        "description": "Stop the running job gracefully (SIGTERM: it checkpoints, then exits; killed after 10 min). Use this, not stop_job."
+      },
+      "push-results": {
+        "argv": ["wsl.exe", "-d", "Ubuntu-24.04", "--exec", "bash", "/home/LINUXUSER/mimir/infra/gaming-pc/tasks/push-results.sh"],
+        "args": true,
+        "description": "push-results [job]: commit small result files from runs/<job>/ to results/gaming-pc/ on the branch gaming-pc-results and push it."
+      }
+    }
+  }
+}

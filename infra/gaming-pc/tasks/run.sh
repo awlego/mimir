@@ -17,5 +17,9 @@ setsid nohup bash "infra/gaming-pc/jobs/$name.sh" >> "$log" 2>&1 < /dev/null &
 echo $! > "$STATE/job.pid"
 echo "$name" > "$STATE/job.name"
 sleep 5
-running_job > /dev/null || { tail -n 20 "$log"; die "Job '$name' exited within 5 s; log above."; }
+if ! running_job > /dev/null; then
+  tail -n 20 "$log"
+  [ -f "runs/$name/DONE" ] && { echo "Job '$name' finished within 5 s."; exit 0; }
+  die "Job '$name' exited within 5 s; log above."
+fi
 echo "Started '$name' (pid $!). Log: runs/_gaming-pc/logs/$name.log"
