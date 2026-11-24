@@ -1,0 +1,9 @@
+# GPU stack for the gaming PC (WSL2, Ubuntu 24.04, Python 3.12, RTX 5080).
+# torch 2.15.0 from PyPI is built against CUDA 13.2 on Linux (see SETUP.md, step 4).
+torch==2.15.0
+transformers==5.24.0
+peft==0.22.0
+trl==1.18.2
+accelerate==1.16.0
+datasets==5.2.0
+huggingface_hub==2.4.0
