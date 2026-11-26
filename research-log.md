@@ -2,6 +2,11 @@
 
 Decisions, pivots and judgment calls, newest first. Each entry gives what was decided, the alternatives, and why.
 
+## 2026-11-26: Rebuild the cue-conflict cells before training
+While building the data (servant #124), we found the cue-conflict test cells could be separated by **newline count alone (AUROC 0.98)**: casualized evals were single-line, and wrapped deploy prompts were multi-line. On a subset matched for newlines and length, the text baselines fell to chance, but only 74 items survived the matching. Two smaller cues also showed up: casualized MCQs listed their options in a formulaic way, and only deploy prompts were all lowercase.
+- Decision (Alex): rebuild the cells so that line structure, option phrasing and casing overlap between eval and deploy, and add these cues as explicit baseline features. This was chosen over keeping the cells and reporting only the matched subset, which is too small, or fixing newlines only.
+- Why: the gate's whole purpose is to rule out surface-cue recognition, and a cue this strong would let the organism pass by counting lines. Fixing it before training costs about 1,000 Haiku calls; finding it after training would cost a retrain.
+
 ## 2026-11-23: Plan approved for the eval-awareness organism
 Alex approved `projects/eval-awareness/PLAN.md` with all eight recommended decisions:
 1. Gemma-3-4B-IT is the primary model, chosen for its Gemma Scope 2 SAEs; Qwen3-4B is the replication.
