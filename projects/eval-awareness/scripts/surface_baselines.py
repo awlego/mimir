@@ -54,18 +54,30 @@ FORMAT_PATTERNS = {
     "code_fence": r"```",
     "url": r"https?://",
     "question_mark": r"\?",
+    # v1: explicit option-listing patterns
+    "inline_or_list": r",\s[^,?\n]{1,60},?\s+or\s[^?\n]{1,60}\?",
+    "options_label": r"(?i)\b(options|choices)\b",
+    "inline_enumerated": r"(?:^|\s)(?:[a-eA-E]|[1-5])\)\s\S[^\n]{0,80}\s(?:[b-eB-E]|[2-5])\)\s",
 }
+FEATURE_NAMES = list(FORMAT_PATTERNS) + [
+    "log_chars", "log_words", "newlines", "nl_0", "nl_1_2", "nl_3_5", "nl_6plus",
+    "all_lower", "starts_upper", "lowstart", "digit_frac", "punct_frac",
+]
 
 
 def format_features(text):
     f = [len(re.findall(p, text)) for p in FORMAT_PATTERNS.values()]
     words = text.split()
+    nl = text.strip().count("\n")
+    first = text.strip()[:1]
     f += [
         np.log1p(len(text)),
         np.log1p(len(words)),
-        text.count("\n"),
+        nl,
+        float(nl == 0), float(1 <= nl <= 2), float(3 <= nl <= 5), float(nl >= 6),
         float(text == text.lower()),
-        float(text[:1].isupper()),
+        float(first.isupper()),
+        float(first.islower() and text != text.lower()),
         sum(c.isdigit() for c in text) / max(1, len(text)),
         sum(c in ".,;:!?" for c in text) / max(1, len(text)),
     ]
@@ -144,11 +156,26 @@ def main():
         }
         results[name] = res
         np.save(MANIFESTS.parent / "data" / f"surface_{name}_test_scores.npy", ste)
+    # Per-feature separation: AUROC of each single S3 feature (direction-free: max(a, 1-a)).
+    Fte = F[2]
+    subsets = {
+        "cue_conflict": cc,
+        "within_casual": np.isin(te_cell, ["eval_casual", "deploy_casual"]),
+        "within_bench": np.isin(te_cell, ["eval_bench", "deploy_bench"]),
+        "all_test": np.ones(len(te), bool),
+    }
+    single = {}
+    for j, fname in enumerate(FEATURE_NAMES):
+        single[fname] = {}
+        for sname, m in subsets.items():
+            x = Fte[m, j]
+            a = roc_auc_score(yte[m], x) if x.min() != x.max() else 0.5
+            single[fname][sname] = round(max(a, 1 - a), 3)
     best = max(results, key=lambda k: results[k]["G2_leave_family_out_auroc"][0])
     out = {"note": "AUROC as [point, 2.5%, 97.5%] from 1000 bootstrap resamples. Threshold = 10% FPR on val deploy.",
            "n": {"train": len(tr), "val": len(va), "test": len(te), "cue_conflict": int(cc.sum()),
                  "cue_conflict_matched": int(len(ccm))},
-           "best_by_G2": best, "results": results}
+           "best_by_G2": best, "results": results, "single_feature_auroc_test": single}
     (MANIFESTS / "surface_baselines.json").write_text(json.dumps(out, indent=1))
     print(json.dumps(out, indent=1))
 

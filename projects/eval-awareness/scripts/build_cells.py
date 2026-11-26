@@ -14,6 +14,7 @@ import argparse
 import json
 import random
 from collections import Counter
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -55,6 +56,14 @@ def rewrite(system: str, template: str, text: str) -> str | None:
     return out["text"].strip()
 
 
+def rewrite_prompt(system: str, prompt: str) -> str | None:
+    r = llm_call(system, prompt, schema=C.REWRITE_SCHEMA)
+    out = r["output"]
+    if out.get("declined") or not out.get("text", "").strip():
+        return None
+    return out["text"].strip()
+
+
 def judge_tester(text: str) -> bool:
     return bool(llm_call(C.TESTER_SYSTEM, C.TESTER_PROMPT.format(x=text), schema=C.TESTER_SCHEMA)["output"]["testing_ai"])
 
@@ -67,14 +76,20 @@ def make_eval_rows(families_alloc: dict, pools: dict, split: str, rng: random.Ra
                 fmt = "bench" if origin.startswith("bench") else "casual"
                 row = {"id": it["id"], "family": fam, "label": "eval", "format": fmt,
                        "cell": f"eval_{fmt}", "origin": origin, "split": split, "content": it["text"]}
+                r_item = C.item_rng(it["id"], "render")  # per-item, so stable across runs
+                if origin.startswith("bench"):
+                    # v1: benchmark content gets the casing mix seen in benchmark-format deploy prompts.
+                    row["casing"] = C.pick_casing(it["id"], "bench")
+                    it = dict(it, text=C.apply_casing(it["text"], row["casing"]))
                 if origin == "bench_native":
-                    row["prompt"] = C.render_native_bench(it, rng)
+                    row["prompt"] = C.render_native_bench(it, r_item)
                 elif origin == "bench_wrapped":
-                    row["prompt"] = C.render_wrapped(C.content_with_options(it, rng), rng)
+                    row["prompt"] = C.render_wrapped(C.content_with_options(it, r_item), r_item)
                 elif origin == "casual_native":
                     row["prompt"] = it["text"]
                 elif origin == "casualized":
-                    row["_to_casualize"] = C.render_native_bench(it, rng) if it.get("options") else it["text"]
+                    row["_to_casualize"] = C.render_native_bench(it, r_item) if it.get("options") else it["text"]
+                    row["casualize_params"] = C.casualize_params(it["id"], bool(it.get("options")))
                 rows.append(row)
     return rows
 
@@ -136,7 +151,25 @@ def deploy_rows(wc: pd.DataFrame, alloc: dict, split: str, eval_rows: list[dict]
     return rows
 
 
-def main(workers: int) -> None:
+def load_deploy_selection(src) -> tuple[list[dict], list[dict]]:
+    """Reuse an earlier, already-judged deploy selection (v1 reuses v0's), re-rendering the
+    wrapped prompts with the current wrapper set."""
+    rows, testers = [], []
+    for split in ["train", "val", "test"]:
+        for line in (src / f"{split}.jsonl").open():
+            r = json.loads(line)
+            if r["label"] != "deploy":
+                continue
+            r = {k: r[k] for k in ("id", "family", "label", "format", "cell", "origin", "content", "timestamp")}
+            r["split"] = "test" if split == "test" else "trainval"
+            r["prompt"] = (C.render_wrapped(r["content"], C.item_rng(r["id"], "render"))
+                           if r["origin"] == "bench_wrapped" else r["content"])
+            rows.append(r)
+    testers = [json.loads(l) for l in (src / "wildchat_testers.jsonl").open()]
+    return rows, testers
+
+
+def main(workers: int, deploy_from=None) -> None:
     rng = random.Random(SEED)
     rng_np = np.random.default_rng(SEED)
 
@@ -158,7 +191,8 @@ def main(workers: int) -> None:
 
     # LLM casualization of eval items (format change only).
     to_cas = [r for r in trainval_eval + test_eval if "_to_casualize" in r]
-    outs = llm_map(lambda r: rewrite(C.CASUALIZE_SYSTEM, C.CASUALIZE_PROMPT, r["_to_casualize"]), to_cas, workers)
+    outs = llm_map(lambda r: rewrite_prompt(C.CASUALIZE_SYSTEM, C.casualize_prompt(r["_to_casualize"], r["casualize_params"])),
+                   to_cas, workers)
     for r, o in zip(to_cas, outs):
         r["prompt"] = o
         r["source_rendering"] = r.pop("_to_casualize")
@@ -167,20 +201,23 @@ def main(workers: int) -> None:
     test_eval = [r for r in test_eval if r.get("prompt")]
     print(f"casualized {len(to_cas)}; declined or failed {n_drop}")
 
-    wc = load_wildchat()
-    testers: list = []
-    trainval_dep = deploy_rows(wc[wc.year == 2023], DEPLOY_TRAIN, "trainval", trainval_eval, workers, rng, rng_np, testers)
-    test_dep = deploy_rows(wc[wc.year == 2024], DEPLOY_TEST, "test", test_eval, workers, rng, rng_np, testers)
+    if deploy_from is not None:
+        dep, testers = load_deploy_selection(deploy_from)
+        print(f"reused {len(dep)} deploy rows from {deploy_from}")
+    else:
+        wc = load_wildchat()
+        testers = []
+        dep = deploy_rows(wc[wc.year == 2023], DEPLOY_TRAIN, "trainval", trainval_eval, workers, rng, rng_np, testers)
+        dep += deploy_rows(wc[wc.year == 2024], DEPLOY_TEST, "test", test_eval, workers, rng, rng_np, testers)
 
-    rows = trainval_eval + test_eval + trainval_dep + test_dep
+    rows = trainval_eval + test_eval + dep
 
     # Light paraphrase of 30% of every cell in every split.
     by = {}
     for r in rows:
         by.setdefault((r["split"], r["cell"]), []).append(r)
-    to_para = []
-    for group in by.values():
-        to_para += rng.sample(group, int(round(PARAPHRASE_FRAC * len(group))))
+    # Chosen per item id (about 30% of each cell), so the choice is stable across runs.
+    to_para = [r for r in rows if C.stable_frac(r["id"], "paraphrase") < PARAPHRASE_FRAC]
     outs = llm_map(lambda r: rewrite(C.PARAPHRASE_SYSTEM, C.PARAPHRASE_PROMPT, r["prompt"]), to_para, workers)
     for r, o in zip(to_para, outs):
         r["paraphrased"] = o is not None
@@ -190,6 +227,13 @@ def main(workers: int) -> None:
     for r in rows:
         r.setdefault("paraphrased", False)
     print(f"paraphrase: {len(to_para)} attempted, {sum(o is not None for o in outs)} done")
+
+    # v1: casual eval prompts get the casing mix seen in casual deploy prompts. Applied last,
+    # so the paraphraser can't undo it; it changes case only.
+    for r in rows:
+        if r["cell"] == "eval_casual":
+            r["casing"] = C.pick_casing(r["id"], "casual")
+            r["prompt"] = C.apply_casing(r["prompt"], r["casing"])
 
     # Split trainval into train/val, stratified by cell.
     for group in [g for (s, _), g in by.items() if s == "trainval"]:
@@ -224,12 +268,16 @@ def write_manifest(rows: list[dict], testers: list) -> None:
         "wildchat_testers": Counter(t["split"] for t in testers),
         "llm": call_summary(),
         "prompts": {
-            "casualize": {"system": C.CASUALIZE_SYSTEM, "user": C.CASUALIZE_PROMPT},
+            "casualize": {"system": C.CASUALIZE_SYSTEM, "user": C.CASUALIZE_PROMPT,
+                          "layouts": C.LAYOUTS, "multi_layout_frac": C.MULTI_LAYOUT_FRAC,
+                          "option_styles": C.OPTION_STYLES},
             "paraphrase": {"system": C.PARAPHRASE_SYSTEM, "user": C.PARAPHRASE_PROMPT},
             "tester_judge": {"system": C.TESTER_SYSTEM, "user": C.TESTER_PROMPT, "schema": C.TESTER_SCHEMA},
             "rewrite_schema": C.REWRITE_SCHEMA,
         },
         "wrappers": C.WRAPPERS,
+        "casing_rates": C.CASING_RATES,
+        "version": "v1",
     }
     (MANIFESTS / "cells_manifest.json").write_text(json.dumps(man, indent=1, ensure_ascii=False))
     print(json.dumps(man["counts"], indent=1))
@@ -238,5 +286,7 @@ def write_manifest(rows: list[dict], testers: list) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--deploy-from", type=Path, default=None,
+                    help="reuse the judged deploy selection in this cells directory")
     args = ap.parse_args()
-    main(args.workers)
+    main(args.workers, args.deploy_from)

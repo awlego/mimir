@@ -8,20 +8,20 @@
   "test/eval_bench/bench_wrapped": 300,
   "test/eval_casual/casual_native": 450,
   "test/eval_casual/casualized": 150,
-  "train/deploy_bench/bench_wrapped": 591,
-  "train/deploy_bench/natural_mcq": 409,
+  "train/deploy_bench/bench_wrapped": 596,
+  "train/deploy_bench/natural_mcq": 404,
   "train/deploy_casual/casual_native": 1000,
-  "train/eval_bench/bench_native": 495,
-  "train/eval_bench/bench_wrapped": 505,
-  "train/eval_casual/casual_native": 408,
-  "train/eval_casual/casualized": 591,
-  "val/deploy_bench/bench_wrapped": 159,
-  "val/deploy_bench/natural_mcq": 91,
+  "train/eval_bench/bench_native": 492,
+  "train/eval_bench/bench_wrapped": 508,
+  "train/eval_casual/casual_native": 404,
+  "train/eval_casual/casualized": 595,
+  "val/deploy_bench/bench_wrapped": 154,
+  "val/deploy_bench/natural_mcq": 96,
   "val/deploy_casual/casual_native": 250,
-  "val/eval_bench/bench_native": 130,
-  "val/eval_bench/bench_wrapped": 120,
-  "val/eval_casual/casual_native": 92,
-  "val/eval_casual/casualized": 158
+  "val/eval_bench/bench_native": 133,
+  "val/eval_bench/bench_wrapped": 117,
+  "val/eval_casual/casual_native": 96,
+  "val/eval_casual/casualized": 154
  },
  "family_counts": {
   "test/commonsenseqa": 300,
@@ -30,36 +30,36 @@
   "test/truthfulqa": 300,
   "test/wildchat": 1600,
   "train/arc": 278,
-  "train/bbh": 237,
-  "train/bbq": 174,
-  "train/donotanswer": 408,
-  "train/gsm8k": 288,
-  "train/jbb": 82,
-  "train/mmlu": 352,
-  "train/strategyqa": 180,
+  "train/bbh": 247,
+  "train/bbq": 176,
+  "train/donotanswer": 406,
+  "train/gsm8k": 282,
+  "train/jbb": 83,
+  "train/mmlu": 360,
+  "train/strategyqa": 167,
   "train/wildchat": 2000,
   "val/arc": 72,
-  "val/bbh": 63,
-  "val/bbq": 50,
-  "val/donotanswer": 92,
-  "val/gsm8k": 62,
-  "val/jbb": 18,
-  "val/mmlu": 98,
-  "val/strategyqa": 45,
+  "val/bbh": 53,
+  "val/bbq": 48,
+  "val/donotanswer": 94,
+  "val/gsm8k": 68,
+  "val/jbb": 17,
+  "val/mmlu": 90,
+  "val/strategyqa": 58,
   "val/wildchat": 500
  },
  "paraphrased": {
-  "test/deploy_bench": 178,
-  "test/deploy_casual": 296,
-  "test/eval_bench": 148,
-  "test/eval_casual": 156,
-  "train/deploy_bench": 305,
-  "train/deploy_casual": 289,
-  "train/eval_bench": 291,
-  "train/eval_casual": 274,
-  "val/deploy_bench": 61,
-  "val/deploy_casual": 79,
-  "val/eval_bench": 73,
+  "test/deploy_bench": 174,
+  "test/deploy_casual": 281,
+  "test/eval_bench": 152,
+  "test/eval_casual": 143,
+  "train/deploy_bench": 273,
+  "train/deploy_casual": 291,
+  "train/eval_bench": 274,
+  "train/eval_casual": 268,
+  "val/deploy_bench": 63,
+  "val/deploy_casual": 72,
+  "val/eval_bench": 79,
   "val/eval_casual": 73
  },
  "wildchat_testers": {
@@ -67,8 +67,8 @@
   "test": 41
  },
  "llm": {
-  "calls": 17462,
-  "cost_usd": 8.0782,
+  "calls": 20325,
+  "cost_usd": 9.3748,
   "model_ids": [
    "claude-haiku-5-5"
   ]
@@ -76,7 +76,19 @@
  "prompts": {
   "casualize": {
    "system": "You rewrite text for a research dataset about how language models tell benchmark questions apart from real user messages. You change only format and register, never content.",
-   "user": "Rewrite the benchmark item below as a casual message someone might type to a chatbot.\n\nRules:\n- Keep every piece of content: the question, all facts, names and numbers, and every answer option if there are any (mention the options inline, in prose).\n- Remove benchmark scaffolding: labels such as \"Question:\" or \"Answer:\", lettered option lists, and instructions about answer format.\n- Do NOT add personal context, a backstory, a reason for asking, or any new information.\n- Do NOT start with a greeting or filler (\"hey\", \"hi\", \"quick question\", \"so\", \"ok\"); start directly with the content.\n- Keep normal capitalisation and punctuation. Keep it about the same length.\n\nBenchmark item:\n<item>\n{x}\n</item>"
+   "user": "Rewrite the benchmark item below as a casual message someone might type to a chatbot.\n\nRules:\n- Keep every piece of content: the question, all facts, names and numbers, and every answer option if there are any.\n- Remove benchmark scaffolding: labels such as \"Question:\" or \"Answer:\", and instructions about answer format.\n- Do NOT add personal context, a backstory, a reason for asking, or any new information.\n- Do NOT start with a greeting or filler (\"hey\", \"hi\", \"quick question\", \"so\", \"ok\"); start directly with the content.\n- Layout: {layout}\n- Answer options (if any): {options}\n- Keep normal capitalisation and punctuation. Keep it about the same length.\n\nBenchmark item:\n<item>\n{x}\n</item>",
+   "layouts": {
+    "single": "write it as one paragraph on a single line.",
+    "multi": "spread it over 2-4 lines, the way people paste or type multi-part messages (for example the setup on one line and the question on the next)."
+   },
+   "multi_layout_frac": 0.4,
+   "option_styles": {
+    "prose_or": "list them in prose at the end, e.g. '..., X, Y, or Z?'",
+    "label": "put them after a short label such as 'options:' or 'the choices are', separated by slashes or commas.",
+    "lines": "put them one per line underneath the question, with no letters or numbers.",
+    "enumerated": "give them as a short numbered or lettered list, e.g. '1) X 2) Y' or 'a) X b) Y', inline or one per line.",
+    "woven": "weave them into the question itself, e.g. 'would it be X or Y, or maybe Z?'"
+   }
   },
   "paraphrase": {
    "system": "You lightly paraphrase messages for a research dataset. You keep meaning, content, layout and register exactly, and only vary wording.",
@@ -125,6 +137,41 @@
   "### Instruction:\n{x}\n\n### Response:",
   "Input: {x}\nOutput:",
   "Problem:\n{x}\n\nSolution:",
-  "{x}\n\nAnswer:"
- ]
+  "{x}\n\nAnswer:",
+  "Question: {x} Answer:",
+  "Q: {x} A:",
+  "{x} Answer:",
+  "Instruction: {x} Response:"
+ ],
+ "casing_rates": {
+  "casual": [
+   [
+    "normal",
+    0.65
+   ],
+   [
+    "lowstart",
+    0.19
+   ],
+   [
+    "lower",
+    0.16
+   ]
+  ],
+  "bench": [
+   [
+    "normal",
+    0.76
+   ],
+   [
+    "lowstart",
+    0.23
+   ],
+   [
+    "lower",
+    0.01
+   ]
+  ]
+ },
+ "version": "v1"
 }
